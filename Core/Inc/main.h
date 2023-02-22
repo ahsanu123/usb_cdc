@@ -57,10 +57,24 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define LP1_ADC_Pin GPIO_PIN_1
+#define LP1_ADC_GPIO_Port GPIOC
+#define LP2_ADC_Pin GPIO_PIN_2
+#define LP2_ADC_GPIO_Port GPIOC
+#define LP3_ADC_Pin GPIO_PIN_1
+#define LP3_ADC_GPIO_Port GPIOA
+#define CS_MMA7455_Pin GPIO_PIN_4
+#define CS_MMA7455_GPIO_Port GPIOA
 #define tog_Pin GPIO_PIN_9
 #define tog_GPIO_Port GPIOE
+#define TRx_en_Pin GPIO_PIN_15
+#define TRx_en_GPIO_Port GPIOE
+#define CS_BME280_Pin GPIO_PIN_11
+#define CS_BME280_GPIO_Port GPIOD
 
 /* USER CODE BEGIN Private defines */
+//#define MMA7455_pin GPIO_PIN_9
+//#define MMA7455_port GPIOE
 
 /* USER CODE END Private defines */
 
