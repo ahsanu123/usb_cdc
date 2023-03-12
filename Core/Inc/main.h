@@ -31,7 +31,6 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -54,15 +53,17 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 
+void spiSetSpeed(uint16_t newSpeed);
+
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define LP1_ADC_Pin GPIO_PIN_1
-#define LP1_ADC_GPIO_Port GPIOC
-#define LP2_ADC_Pin GPIO_PIN_2
-#define LP2_ADC_GPIO_Port GPIOC
-#define LP3_ADC_Pin GPIO_PIN_1
-#define LP3_ADC_GPIO_Port GPIOA
+#define LP1_Pin GPIO_PIN_1
+#define LP1_GPIO_Port GPIOC
+#define LP2_Pin GPIO_PIN_2
+#define LP2_GPIO_Port GPIOC
+#define LP3_Pin GPIO_PIN_1
+#define LP3_GPIO_Port GPIOA
 #define CS_MMA7455_Pin GPIO_PIN_4
 #define CS_MMA7455_GPIO_Port GPIOA
 #define tog_Pin GPIO_PIN_9
@@ -73,8 +74,18 @@ void Error_Handler(void);
 #define CS_BME280_GPIO_Port GPIOD
 
 /* USER CODE BEGIN Private defines */
-//#define MMA7455_pin GPIO_PIN_9
-//#define MMA7455_port GPIOE
+
+#define BYTE_TO_BINARY_PATTERN "%c%c%c%c %c%c%c%c\n"
+#define BYTE_TO_BINARY(byte)  \
+  (byte & 0x80 ? '1' : '0'), \
+  (byte & 0x40 ? '1' : '0'), \
+  (byte & 0x20 ? '1' : '0'), \
+  (byte & 0x10 ? '1' : '0'), \
+  (byte & 0x08 ? '1' : '0'), \
+  (byte & 0x04 ? '1' : '0'), \
+  (byte & 0x02 ? '1' : '0'), \
+  (byte & 0x01 ? '1' : '0')
+
 
 /* USER CODE END Private defines */
 

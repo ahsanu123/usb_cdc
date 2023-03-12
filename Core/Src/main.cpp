@@ -18,13 +18,17 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 #include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "usbd_cdc_if.h"
 #include <stdio.h>
-#include <MMA_7455.h>
-#include <usbd_cdc_if.h>
+#include "MMA_7455.h"
+#include "SparkFunBME280.h"
+#include "Modbus.h"
+#include "semphr.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -46,8 +50,8 @@ ADC_HandleTypeDef hadc1;
 DMA_HandleTypeDef hdma_adc1;
 
 SPI_HandleTypeDef hspi1;
-DMA_HandleTypeDef hdma_spi1_tx;
 DMA_HandleTypeDef hdma_spi1_rx;
+DMA_HandleTypeDef hdma_spi1_tx;
 
 TIM_HandleTypeDef htim3;
 
@@ -55,29 +59,67 @@ UART_HandleTypeDef huart3;
 DMA_HandleTypeDef hdma_usart3_rx;
 DMA_HandleTypeDef hdma_usart3_tx;
 
+/* Definitions for analogT */
+osThreadId_t analogTHandle;
+const osThreadAttr_t analogT_attributes = {
+  .name = "analogT",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for modbusT */
+osThreadId_t modbusTHandle;
+const osThreadAttr_t modbusT_attributes = {
+  .name = "modbusT",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityLow,
+};
+/* Definitions for spiT */
+osThreadId_t spiTHandle;
+const osThreadAttr_t spiT_attributes = {
+  .name = "spiT",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityHigh,
+};
+/* Definitions for cdcT */
+osThreadId_t cdcTHandle;
+const osThreadAttr_t cdcT_attributes = {
+  .name = "cdcT",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityLow,
+};
 /* USER CODE BEGIN PV */
-uint16_t adcbuf[2];
-int convComplete=0;
-uint16_t adcin=0;
-float temp=0;
 
-char buffer[100];
 #define ADC_BUFF_NUM 16
+
 typedef struct adcvalues{
 	uint16_t raw[ADC_BUFF_NUM];
 	float intTemp;
 }adcval_t;
+
+
 adcval_t adcint;
+uint16_t modbusData[128];
+
+MMA_7455 vib(spi_protocol, 9);
+BME280 	 temp;
+modbusHandler_t mb;
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
-static void MX_ADC1_Init(void);
 static void MX_TIM3_Init(void);
+static void MX_ADC1_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_USART3_UART_Init(void);
+void analogTask(void *argument);
+void modbusTask(void *argument);
+void spiTask(void *argument);
+void cdcTask(void *argument);
+
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -116,30 +158,77 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  MX_USB_DEVICE_Init();
-  MX_ADC1_Init();
   MX_TIM3_Init();
+  MX_ADC1_Init();
   MX_SPI1_Init();
+  MX_USB_DEVICE_Init();
   MX_USART3_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adcint.raw, ADC_BUFF_NUM);
-  HAL_TIM_Base_Start(&htim3);
+
+  mb.uModbusType = MB_SLAVE;
+  mb.port 		 = &huart3;
+  mb.u8id 		 = 3;
+  mb.u16timeOut  = 30;
+  mb.EN_Port	 = TRx_en_GPIO_Port;
+  mb.EN_Pin		 = TRx_en_Pin;
+  mb.u16regs	 = modbusData;
+  mb.u16regsize	 = sizeof(modbusData)/sizeof(modbusData[0]);
+  mb.xTypeHW	 = USART_HW_DMA;
+
+  // init modbus and start
+  ModbusInit(&mb);
+  ModbusStart(&mb);
+
   /* USER CODE END 2 */
 
+  /* Init scheduler */
+  osKernelInitialize();
+
+  /* USER CODE BEGIN RTOS_MUTEX */
+  /* add mutexes, ... */
+  /* USER CODE END RTOS_MUTEX */
+
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
+  /* add semaphores, ... */
+  /* USER CODE END RTOS_SEMAPHORES */
+
+  /* USER CODE BEGIN RTOS_TIMERS */
+  /* start timers, add new ones, ... */
+  /* USER CODE END RTOS_TIMERS */
+
+  /* USER CODE BEGIN RTOS_QUEUES */
+  /* add queues, ... */
+  /* USER CODE END RTOS_QUEUES */
+
+  /* Create the thread(s) */
+  /* creation of analogT */
+  analogTHandle = osThreadNew(analogTask, NULL, &analogT_attributes);
+
+  /* creation of modbusT */
+  modbusTHandle = osThreadNew(modbusTask, NULL, &modbusT_attributes);
+
+  /* creation of spiT */
+  spiTHandle = osThreadNew(spiTask, NULL, &spiT_attributes);
+
+  /* creation of cdcT */
+  cdcTHandle = osThreadNew(cdcTask, NULL, &cdcT_attributes);
+
+  /* USER CODE BEGIN RTOS_THREADS */
+  /* add threads, ... */
+  /* USER CODE END RTOS_THREADS */
+
+  /* USER CODE BEGIN RTOS_EVENTS */
+  /* add events, ... */
+  /* USER CODE END RTOS_EVENTS */
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	if(convComplete==1){
-	printf("| %d \t| %d \t| %d \t| %d \t| %d \t| %d \t| %d \t| %d \t| %d \t| %d \t| %d \t| %d \t| %d \t| %d \t| %d \t| %d \t| %ld s\n",
-		  adcint.raw[0], adcint.raw[1], adcint.raw[2], adcint.raw[3], adcint.raw[4], adcint.raw[5], adcint.raw[6],
-		  adcint.raw[7], adcint.raw[8], adcint.raw[9], adcint.raw[10], adcint.raw[11], adcint.raw[12], adcint.raw[13],
-		  adcint.raw[14], adcint.raw[15], HAL_GetTick());
-	printf(" -> %ld\n", HAL_GetTick());
-
-
-  }
-convComplete=0;
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -231,7 +320,7 @@ static void MX_ADC1_Init(void)
 
   /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
   */
-  sConfig.Channel = ADC_CHANNEL_1;
+  sConfig.Channel = ADC_CHANNEL_TEMPSENSOR;
   sConfig.Rank = 1;
   sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
@@ -303,7 +392,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -337,9 +426,9 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 21-1;
+  htim3.Init.Prescaler = 84-1;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 10-1;
+  htim3.Init.Period = 100-1;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
@@ -408,20 +497,20 @@ static void MX_DMA_Init(void)
 
   /* DMA interrupt init */
   /* DMA1_Stream1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream1_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Stream1_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream1_IRQn);
   /* DMA1_Stream3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream3_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Stream3_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream3_IRQn);
   /* DMA2_Stream0_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
-  /* DMA2_Stream2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
-  /* DMA2_Stream5_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream5_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA2_Stream5_IRQn);
+  /* DMA2_Stream3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream3_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream3_IRQn);
+  /* DMA2_Stream4_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream4_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream4_IRQn);
 
 }
 
@@ -443,7 +532,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(CS_MMA7455_GPIO_Port, CS_MMA7455_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, LP3_Pin|CS_MMA7455_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOE, tog_Pin|TRx_en_Pin, GPIO_PIN_RESET);
@@ -451,12 +540,12 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(CS_BME280_GPIO_Port, CS_BME280_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : CS_MMA7455_Pin */
-  GPIO_InitStruct.Pin = CS_MMA7455_Pin;
+  /*Configure GPIO pins : LP3_Pin CS_MMA7455_Pin */
+  GPIO_InitStruct.Pin = LP3_Pin|CS_MMA7455_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(CS_MMA7455_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : tog_Pin TRx_en_Pin */
   GPIO_InitStruct.Pin = tog_Pin|TRx_en_Pin;
@@ -476,20 +565,160 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-int _write(int file, char *ptr, int len){
-	CDC_Transmit_FS((uint8_t*)ptr, len); return len;
+/**
+ * hapus extern "C" jika format file ini .c
+ * tambahkan extern "C" jika format file ini .cpp.
+ **/
+
+extern "C" int _write(int file, char *ptr, int len) {
+    CDC_Transmit_FS((uint8_t*) ptr, len); return len;
 }
 
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc){
-	if(hadc->Instance == ADC1){
-		HAL_GPIO_TogglePin(tog_GPIO_Port, tog_Pin);
-		convComplete=1;
-//		printf("% -> ld\n", HAL_GetTick());
-	}
-
+void printBin(unsigned char value)
+{
+    for (int i = sizeof(char) * 7; i >= 0; i--)
+        printf("%d", (value & (1 << i)) >> i );
+    putc('\n', stdout);
 }
+
+char buffer[250];
 
 /* USER CODE END 4 */
+
+/* USER CODE BEGIN Header_analogTask */
+/**
+  * @brief  Function implementing the analogT thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_analogTask */
+void analogTask(void *argument)
+{
+  /* init code for USB_DEVICE */
+//  MX_USB_DEVICE_Init();
+  /* USER CODE BEGIN 5 */
+  /* Infinite loop */
+  for(;;)
+  {
+	  osSemaphoreAcquire(mb.ModBusSphrHandle, portMAX_DELAY);
+//	  xSemaphoreTake(mb.ModBusSphrHandle, portMAX_DELAY);
+	  HAL_GPIO_TogglePin(LP3_GPIO_Port, LP3_Pin);
+//	  xSemaphoreGive(mb.ModBusSphrHandle);
+	  osSemaphoreRelease(mb.ModBusSphrHandle);
+	  osDelay(200);
+  }
+  /* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_modbusTask */
+/**
+* @brief Function implementing the modbusT thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_modbusTask */
+void modbusTask(void *argument)
+{
+  /* USER CODE BEGIN modbusTask */
+  /* Infinite loop */
+  for(;;)
+  {
+//	  printf("modbus task: %d\n", HAL_GetTick());
+	  osDelay(6000);
+  }
+  /* USER CODE END modbusTask */
+}
+
+/* USER CODE BEGIN Header_spiTask */
+/**
+* @brief Function implementing the spiT thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_spiTask */
+void spiTask(void *argument)
+{
+  /* USER CODE BEGIN spiTask */
+  /* Infinite loop */
+	HAL_GPIO_WritePin(CS_MMA7455_GPIO_Port, CS_MMA7455_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(CS_BME280_GPIO_Port, CS_BME280_Pin, GPIO_PIN_SET);
+
+	vib.begin();
+	vib.setSensitivity(2);
+	vib.setMode(measure);
+	vib.setAxisOffset(0, 0, 0);
+
+	temp.begin();
+
+
+	uint8_t buf[2];
+	uint8_t rec=0x01;
+	uint8_t read=0x16;
+	float bxg, byg, bzg;
+	int xg, yg, zg;
+  for(;;)
+  {
+
+//	  float bxg = temp.readTempC();
+//	  int xg = (int) bxg;
+//	  printf("temp *C: %f \n", temp.readTempC());
+//	  printf("temp *C: %i\n", xg);
+
+//	  bxg = vib.readAxis8g('x');
+//	  xg = bxg *10000;
+//
+//	  byg = vib.readAxis8g('y');
+//	  yg = byg *10000;
+//
+//	  bzg = vib.readAxis8g('z');
+//	  zg = bzg *10000;
+//	  printf(" \t%.5f\t|\t%.5f\t|\t%.5f\t|\n", bxg, byg, bzg);
+
+
+	  osDelay(250);
+  }
+  /* USER CODE END spiTask */
+}
+
+/* USER CODE BEGIN Header_cdcTask */
+/**
+* @brief Function implementing the cdcT thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_cdcTask */
+void cdcTask(void *argument)
+{
+  /* USER CODE BEGIN cdcTask */
+  /* Infinite loop */
+  for(;;)
+  {
+//	  printf("CDC: %d\n", HAL_GetTick());
+	  osDelay(200);
+  }
+  /* USER CODE END cdcTask */
+}
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM6 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM6) {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
@@ -502,6 +731,7 @@ void Error_Handler(void)
   __disable_irq();
   while (1)
   {
+	  printf("initialization Error!!");
   }
   /* USER CODE END Error_Handler_Debug */
 }

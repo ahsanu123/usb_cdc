@@ -30,4 +30,21 @@
 		<nature>org.eclipse.cdt.managedbuilder.core.managedBuildNature</nature>
 		<nature>org.eclipse.cdt.managedbuilder.core.ScannerConfigNature</nature>
 	</natures>
+	<linkedResources>
+		<link>
+			<name>MMA_7455</name>
+			<type>2</type>
+			<location>D:/STM32CUBEIDEWorkspace1.9.0/MMA_7455</location>
+		</link>
+		<link>
+			<name>MODBUS-LIB</name>
+			<type>2</type>
+			<location>D:/STM32CUBEIDEWorkspace1.9.0/Modbus-STM32-HAL-FreeRTOS/MODBUS-LIB</location>
+		</link>
+		<link>
+			<name>sparkfunBME280STM32</name>
+			<type>2</type>
+			<location>D:/STM32CUBEIDEWorkspace1.9.0/sparkfunBME280STM32</location>
+		</link>
+	</linkedResources>
 </projectDescription>

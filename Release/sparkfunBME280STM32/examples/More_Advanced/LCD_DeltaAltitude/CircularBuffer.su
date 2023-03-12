@@ -1,0 +1,6 @@
+D:/STM32CUBEIDEWorkspace1.9.0/sparkfunBME280STM32/examples/More_Advanced/LCD_DeltaAltitude/CircularBuffer.cpp:12:1:CircularBuffer::CircularBuffer(uint16_t)	16	static
+D:/STM32CUBEIDEWorkspace1.9.0/sparkfunBME280STM32/examples/More_Advanced/LCD_DeltaAltitude/CircularBuffer.cpp:21:1:CircularBuffer::~CircularBuffer()	8	static
+D:/STM32CUBEIDEWorkspace1.9.0/sparkfunBME280STM32/examples/More_Advanced/LCD_DeltaAltitude/CircularBuffer.cpp:33:7:float CircularBuffer::getElement(uint16_t)	0	static
+D:/STM32CUBEIDEWorkspace1.9.0/sparkfunBME280STM32/examples/More_Advanced/LCD_DeltaAltitude/CircularBuffer.cpp:53:6:void CircularBuffer::pushElement(float)	0	static
+D:/STM32CUBEIDEWorkspace1.9.0/sparkfunBME280STM32/examples/More_Advanced/LCD_DeltaAltitude/CircularBuffer.cpp:75:7:float CircularBuffer::averageLast(uint16_t)	8	static
+D:/STM32CUBEIDEWorkspace1.9.0/sparkfunBME280STM32/examples/More_Advanced/LCD_DeltaAltitude/CircularBuffer.cpp:101:10:uint16_t CircularBuffer::recordLength()	0	static
